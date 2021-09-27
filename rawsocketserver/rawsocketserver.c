@@ -9,7 +9,9 @@
 #include <netdb.h>
 #include <errno.h>
 
-#define BUF_SIZE 100
+
+#define BUF_SIZE 1440
+
 
 int main(int argc, char *argv[])
 {
@@ -40,8 +42,6 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-
-
     num_port = atoi(argv[1]);
 
     if (num_port < 1024 || num_port > 49151)
@@ -50,7 +50,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s port ip_address_v4\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
 
     memset(&server, 0, sizeof(struct sockaddr_in));
 
@@ -72,6 +71,7 @@ int main(int argc, char *argv[])
     if (-1 == bind(fd_soc, (struct sockaddr *) &server, sizeof(struct sockaddr_in)))
     {
         perror("Error in bind(...)");
+        close(fd_soc);
         exit(EXIT_FAILURE);
     }
 
@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
     if (-1 == size_buf_data)
     {
         perror("Error in recvfrom(...)");
+        close(fd_soc);
         exit(EXIT_FAILURE);
     }
 
@@ -122,8 +123,9 @@ int main(int argc, char *argv[])
             (struct sockaddr *)&client_addr, client_addr_size);
     if (0 != errno || num_send_data != size_buf_data)
     {
-        perror("Error in send(...)");
+        perror("Error in sendto(...)");
         fprintf(stderr, "Partial send?\n");
+        close(fd_soc);
         exit(EXIT_FAILURE);
     }
 

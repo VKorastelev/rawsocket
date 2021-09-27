@@ -10,7 +10,9 @@
 #include <netdb.h>
 #include <errno.h>
 
-#define BUF_SIZE 100
+
+#define BUF_SIZE 1440
+
 
 int main(int argc, char *argv[])
 {
@@ -18,6 +20,7 @@ int main(int argc, char *argv[])
 
     struct sockaddr_in server;
     struct udphdr udp_header = {0};
+    struct udphdr *pudp_header = NULL;
 
     int srv_num_port;
     int cli_num_port;
@@ -104,8 +107,9 @@ int main(int argc, char *argv[])
             (struct sockaddr *) &server, sizeof(struct sockaddr_in));
     if (0 != errno || num_send_data != size_buf_data)
     {
-        perror("Error in send(...)");
+        perror("Error in sendto(...)");
         fprintf(stderr, "Partial send?\n");
+        close(fd_soc);
         exit(EXIT_FAILURE);
     }
 
@@ -118,13 +122,14 @@ int main(int argc, char *argv[])
         size_buf_data = recvfrom(fd_soc, buf, sizeof(buf) - 1, 0, NULL, NULL);
         if (-1 == size_buf_data)
         {
-            perror("Error in recv(...)");
+            perror("Error in recvfrom(...)");
+            close(fd_soc);
             exit(EXIT_FAILURE);
         }
 
-        memcpy(&udp_header, &buf[20], sizeof(udp_header));
+        pudp_header = (struct udphdr *)&buf[20];
 
-        if (htons(cli_num_port) == udp_header.dest)
+        if (htons(cli_num_port) == pudp_header->dest)
         {
             buf[size_buf_data]='\0';
 
