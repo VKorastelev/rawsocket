@@ -9,18 +9,10 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <errno.h>
+#include "printdump.h"
 
 
 #define BUF_SIZE 1440
-
-
-void print_buf(
-        unsigned char const *buf,
-        ssize_t size);
-
-void print_chars(
-        unsigned char const *buf,
-        ssize_t size);
 
 
 int main(int argc, char *argv[])
@@ -115,8 +107,9 @@ int main(int argc, char *argv[])
             (struct sockaddr *) &server, sizeof(struct sockaddr_in));
     if (0 != errno || num_send_data != size_buf_data)
     {
-        perror("Error in send(...)");
+        perror("Error in sendto(...)");
         fprintf(stderr, "Partial send?\n");
+        close(fd_soc);
         exit(EXIT_FAILURE);
     }
 
@@ -129,78 +122,18 @@ int main(int argc, char *argv[])
         size_buf_data = recvfrom(fd_soc, buf, sizeof(buf) - 1, 0, NULL, NULL);
         if (-1 == size_buf_data)
         {
-            perror("Error in recv(...)");
+            perror("Error in recvfrom(...)");
+            close(fd_soc);
             exit(EXIT_FAILURE);
         }
 
         printf("Client recive %ld bytes from UDP-RAW socket:\n",
                 size_buf_data);
 
-        print_buf((unsigned char *)buf, size_buf_data);
+        print_dump((unsigned char *)buf, size_buf_data);
     }
 
     close(fd_soc);
 
     return 0;
-}
-
-
-void print_buf(
-        unsigned char const *const buf,
-        ssize_t const size)
-{
-    int i = 0;
-    int piece = 0;
-
-    if (NULL != buf && 0 != size)
-    {
-        for (i = 0; i < size; i++)
-        {
-            printf("%02x ", buf[i]);
-
-            if (15 == (i % 16))
-            {
-                putchar('|');
-                print_chars(&buf[i - 15], 16);
-                putchar('\n');
-            }
-        }
-
-        piece = i % 16;
-
-        if (0 != piece)
-        {
-            for (int j = 0; j < 16 - piece; j++)
-            {
-                printf("   ");
-            }
-
-            putchar('|');
-            print_chars(&buf[i - piece], piece);
-            putchar('\n');
-        }
-
-        putchar('\n');
-    }
-}
-
-
-void print_chars(
-        unsigned char const *const buf,
-        ssize_t const size)
-{
-    if (NULL != buf && 0 != size)
-    {
-        for (int i = 0; i < size; i++)
-        {
-            if (buf[i] < 0x20 || buf[i] > 0x7E)
-            {
-                putchar(0x2E);
-            }
-            else
-            {
-                putchar(buf[i]);
-            }
-        }
-    }
 }
