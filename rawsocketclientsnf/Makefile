@@ -2,7 +2,7 @@ TARGET := rawsocketclientsnf
 srcfiles = $(shell find ./ -maxdepth 1 -name "*.c")
 objfiles = $(srcfiles:.c=.o)
 CC := gcc
-CFLAGS = -Wall#-pthread
+CFLAGS = -Wall -Wextra#-pthread
 LDFLAGS = #-ldl# -lpthread
 
 #$(info VAR="$(objfiles)")

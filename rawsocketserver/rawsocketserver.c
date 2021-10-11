@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
     ssize_t size_buf_data = 0;
     ssize_t num_send_data = 0;
 
-    if (argc != 3) {
+    if (3 != argc) {
         fprintf(stderr, "Usage: %s port ip_address_v4\n", argv[0]);
         exit(EXIT_FAILURE);
     }

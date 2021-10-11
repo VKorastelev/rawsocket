@@ -3,12 +3,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/udp.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <errno.h>
+#include "printdump.h"
 
 
 #define BUF_SIZE 1440
@@ -18,57 +20,55 @@ int main(int argc, char *argv[])
 {
     int fd_soc = 0;
 
-    struct sockaddr_in server;
-    struct udphdr udp_header = {0};
-    struct udphdr *pudp_header = NULL;
+    struct sockaddr_in server_in = {0};
+    struct udphdr *udp_header = NULL;
 
-    int srv_num_port;
-    int cli_num_port;
-    struct in_addr addr;
+    int dest_num_port;
+    int src_num_port;
+    struct in_addr dest_addr;
 
     char buf[BUF_SIZE];
     ssize_t size_buf_data = 0;
     ssize_t num_send_data = 0;
 
-    if (argc != 4) {
-        fprintf(stderr, "Usage: %s server_port client_port ip_address_v4\n", argv[0]);
+    if (4 != argc) {
+        fprintf(stderr, "Usage: %s <server_port> <client_port> <server ip_address_v4>\n",
+                argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    if (0 == inet_aton(argv[3], &addr))
-    {
-        fprintf(stderr, "Invalid IP_v4 address (must be xxx.xxx.xxx.xxx)\n");
-        fprintf(stderr, "Usage: %s server_port client_port ip_address_v4\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
+    dest_num_port = atoi(argv[1]);
 
-    srv_num_port = atoi(argv[1]);
-
-    if (srv_num_port < 1024 || srv_num_port > 49151)
+    if (dest_num_port < 1024 || dest_num_port > 49151)
     {
         fprintf(stderr, "Invalid server port number (must be in the range:"
                 " 1024-49151)\n");
-        fprintf(stderr, "Usage: %s server_port client_port ip_address_v4\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    cli_num_port = atoi(argv[2]);
+    src_num_port = atoi(argv[2]);
 
-    if (cli_num_port < 1024 || cli_num_port > 49151)
+    if (src_num_port < 1024 || src_num_port > 49151)
     {
         fprintf(stderr, "Invalid client port number (must be in the range:"
                 " 1024-49151)\n");
-        fprintf(stderr, "Usage: %s server_port client_port ip_address_v4\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    memset(&server, 0, sizeof(struct sockaddr_in));
-    server.sin_family = AF_INET;
-    server.sin_port = htons(srv_num_port);
-    server.sin_addr.s_addr = addr.s_addr;
+    if (0 == inet_aton(argv[3], &dest_addr))
+    {
+        fprintf(stderr, "Invalid IP_v4 address (must be xxx.xxx.xxx.xxx)\n");
+        exit(EXIT_FAILURE);
+    }
 
-    printf("Server IP address in network byte order:%d\n", server.sin_addr.s_addr);
-    printf("Server port number in network byte order:%d\n", server.sin_port);
+    //memset(&server_in, 0, sizeof(struct sockaddr_in));
+    server_in.sin_family = AF_INET;
+    server_in.sin_port = htons(dest_num_port);
+    server_in.sin_addr.s_addr = dest_addr.s_addr;
+
+    printf("Server port number in network byte order:%x\n", server_in.sin_port);
+    printf("Client port number in network byte order:%x\n", htons(src_num_port));
+    printf("Server IP address in network byte order:%x\n", server_in.sin_addr.s_addr);
 
     fd_soc = socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
     if (-1 == fd_soc)
@@ -77,34 +77,48 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    snprintf(buf, sizeof(buf) - 1 - sizeof(udp_header), "Hello!!! Client PID = %d",
+    // Clear buffer
+    memset(
+        buf,
+        0,
+        sizeof(buf));
+    size_buf_data = 0;
+
+    // + UDP header and payload
+    udp_header = (struct udphdr *)&buf[size_buf_data];
+
+    udp_header->source = htons(src_num_port);
+    udp_header->dest = htons(dest_num_port);
+    // udp_header->len - size UDP header and payload later
+    udp_header->check = 0;
+
+    size_buf_data += sizeof(struct udphdr);
+    
+    snprintf(
+            &buf[size_buf_data],
+            sizeof(buf)
+            - size_buf_data
+            - 1,
+            "Hello!!! This is client with PID = %d",
             getpid());
-    size_buf_data = strlen(buf) + 1;
 
-    udp_header.source = htons(cli_num_port);
-    udp_header.dest = htons(srv_num_port);
-    udp_header.len = htons(sizeof(udp_header) + size_buf_data);
-    udp_header.check = 0;
+    size_buf_data += strlen(&buf[size_buf_data]) + 1;
 
-    printf("udp_header.len = %d sizeof(udphdr) = %ld\n",
-            udp_header.len,
-            sizeof(udp_header));
+    // Size in UDP
+    udp_header->len = htons(size_buf_data);
 
-    memmove(&buf[sizeof(udp_header)], buf, size_buf_data);
-
-    memcpy(buf, &udp_header, sizeof(udp_header));
-
-    size_buf_data += sizeof(udp_header);
-
-    printf("The size of the sent buffer (UDP header %ld bytes + string %ld"
-            " bytes including \\0) = %ld, string: %s\n",
-            sizeof(udp_header),
-            strlen(&buf[sizeof(udp_header)]) + 1,
+    printf("The size of the send buffer (UDP header %ld bytes"
+            " + string %ld bytes including \\0) = %ld,\nstring: %s\n",
+            sizeof(struct udphdr),
+            size_buf_data - sizeof(struct udphdr),
             size_buf_data,
             &buf[sizeof(udp_header)]);
 
+    puts("\nSend buffer:");
+    print_dump((unsigned char *)buf, size_buf_data);
+
     num_send_data = sendto(fd_soc, buf, size_buf_data, 0, 
-            (struct sockaddr *) &server, sizeof(struct sockaddr_in));
+            (struct sockaddr *) &server_in, sizeof(struct sockaddr_in));
     if (0 != errno || num_send_data != size_buf_data)
     {
         perror("Error in sendto(...)");
@@ -127,14 +141,19 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
 
-        pudp_header = (struct udphdr *)&buf[20];
+        udp_header = (struct udphdr *)&buf[sizeof(struct iphdr)];
 
-        if (htons(cli_num_port) == pudp_header->dest)
+        if (htons(src_num_port) == udp_header->dest)
         {
             buf[size_buf_data]='\0';
 
             printf("Client recive %ld bytes from server\n", size_buf_data);
-            printf("From server receive string: %s\n", &buf[20 + sizeof(udp_header)]);
+            printf("From server receive string: %s\n",
+                    &buf[sizeof(struct iphdr) + sizeof(struct udphdr)]);
+
+            puts("\nReceive buffer:");
+            print_dump((unsigned char *)buf, size_buf_data);
+
             break;
         }
     }

@@ -1,4 +1,4 @@
-TARGET := rawsocketserver
+TARGET := rawsocketclienteth
 srcfiles = $(shell find ./ -maxdepth 1 -name "*.c")
 objfiles = $(srcfiles:.c=.o)
 CC := gcc
